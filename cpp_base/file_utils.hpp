@@ -82,5 +82,23 @@ public:
 
 };
 
+class Path {
+public:
+    bool is_dir();
+    bool is_file();
+    bool exists();
+
+    std::string basename(const std::string & src) {
+        size_t lastPos = src.find_last_of("/");
+        if (lastPos == std::string::npos) return src;
+        return src.substr(lastPos + 1);
+    }
+
+    std::string dirname(const std::string & src) {
+        size_t lastPos = src.find_last_of("/");
+        if (lastPos == std::string::npos) return src;
+        return src.substr(0, lastPos + 1);
+    }
+};
     
 }

@@ -27,6 +27,7 @@
 #include <chrono>
 #include <sys/time.h>
 
+#include "../base/timestamp.hpp"
 using namespace std;
 
 static const std::string create_db_sql = " \
@@ -43,7 +44,7 @@ void InsertFunc(sqlite3* db) {
     ::time(&t1);
 
     sqlite3_stmt* stmt = nullptr;
-    std::string sql = "insert into my_table (aaa) values (?)";
+    std::string sql = "insert into my_table (aaa, time) values (?, ?)";
     int ret = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
     if (ret != SQLITE_OK) {
         cout << "prepare err " << endl;
@@ -54,8 +55,12 @@ void InsertFunc(sqlite3* db) {
     //     cout << "begin tran error " << endl;
     //     return;
     // }
-    for (size_t i = 0; i < 10000; i++) {
+    for (size_t i = 0; i < 1; i++) {
         sqlite3_bind_int(stmt, 1, i);
+        auto t = StBase::Timestamp::Now();
+        cout << t.FormatString() << endl;
+        cout << t.ToUnixTime() << endl;
+        sqlite3_bind_text(stmt, 2, t.FormatString().c_str(), t.FormatString().size(), SQLITE_TRANSIENT);
         int ret = sqlite3_step(stmt);
         if (ret != SQLITE_DONE) {
             cout << i << " insert error " << ret << endl;
@@ -73,26 +78,38 @@ void InsertFunc(sqlite3* db) {
 
 void QueryFunc(sqlite3* db) {
     sqlite3_stmt* stmt = nullptr;
-    std::string sql = "select count(*) from my_table where aaa > 2000";
+    std::string sql = "select time from my_table order by time desc limit 1";
     int ret = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
     if (ret != SQLITE_OK) {
         cout << "prepare err " << endl;
         return;
     }
-    while(1) {
-        int ret = sqlite3_step(stmt);
-        switch (ret) {
-            case SQLITE_ROW:
-                // cout << std::this_thread::get_id() << " count " << sqlite3_column_int(stmt, 0) << endl;
-                break;
-            case SQLITE_DONE:
-                break;
-            default:
-                cout << "query error " << ret << endl;
-        }
-        sqlite3_reset(stmt);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    while(sqlite3_step(stmt) == SQLITE_ROW) {
+        string a = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        auto b = StBase::Timestamp::FromString(a);
+        cout << a << endl;
+        cout << b.FormatString() << endl;
+        cout << b.ToUnixTime() << endl;
     }
+
+
+    // while(1) {
+    //     int ret = sqlite3_step(stmt);
+    //     switch (ret) {
+    //         case SQLITE_ROW:
+    //             // cout << std::this_thread::get_id() << " count " << sqlite3_column_int(stmt, 0) << endl;
+    //             time_t a = static_cast<time_t>(sqlite3_column_int64(stmt, 0));
+    //             cout << StBase::Timestamp::FromUnixTime(a).FormatString() << endl;
+    //             break;
+    //         case SQLITE_DONE:
+    //             break;
+    //         default:
+    //             cout << "query error " << ret << endl;
+    //     }
+    //     sqlite3_reset(stmt);
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    // }
 
     sqlite3_finalize(stmt);
 }
@@ -138,16 +155,22 @@ sqlite3* NewConn() {
 
 int main() {
     sqlite3* db1 = NewConn();
-    sqlite3* db2 = NewConn();
-    sqlite3* db3 = NewConn();
+    // sqlite3* db2 = NewConn();
+    // sqlite3* db3 = NewConn();
 
-    auto a = std::thread(InsertFunc, db1);
-    auto b = std::thread(QueryFunc, db1);
-    auto c = std::thread(QueryFunc, db1);
-    a.join();
-    b.join();
-    c.join();
+    // auto a = std::thread(InsertFunc, db1);
+    // auto b = std::thread(QueryFunc, db1);
+    // auto c = std::thread(QueryFunc, db1);
+    // a.join();
+    // b.join();
+    // c.join();
+    // sqlite3_close(db1);
+    // sqlite3_close(db2);
+    
+    InsertFunc(db1);
+    QueryFunc(db1);
+    
     sqlite3_close(db1);
-    sqlite3_close(db2);
-    sqlite3_close(db3);
+
+
 }

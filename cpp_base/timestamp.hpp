@@ -2,6 +2,8 @@
 #include <string>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
 #include <sys/time.h>
 
 namespace StBase {
@@ -34,6 +36,20 @@ public:
         return Timestamp(tt * MicroSecondsPerSecond + mics);
     }
 
+    static Timestamp FromString(const std::string & str) {
+        int year, mon, day, hour, min, sec;
+        ::sscanf(str.c_str(), "%d-%d-%d %d:%d:%d", &year, &mon, &day, &hour, &min, &sec);
+        struct tm t = {0};
+        t.tm_year = year - 1900;
+        t.tm_mon = mon - 1;
+        t.tm_mday = day;
+        t.tm_hour = hour;
+        t.tm_min = min;
+        t.tm_sec = sec;
+        
+        return FromUnixTime(timegm(&t));
+    }
+
 public:
     time_t ToUnixTime() const {
         return static_cast<time_t>(microSec_ / MicroSecondsPerSecond);
@@ -41,7 +57,7 @@ public:
 
     std::string FormatString() const {
         time_t tt_time = static_cast<time_t>(microSec_ / MicroSecondsPerSecond);
-        struct tm tm_time;
+        struct tm tm_time = {0};
         gmtime_r(&tt_time, &tm_time);
         char buf[64] = {0};
         snprintf(buf, sizeof(buf), "%4d-%02d-%02d %02d:%02d:%02d", 
