@@ -8,7 +8,12 @@
 
 namespace StBase {
 
-
+// std::chrono::nanoseconds    duration<long long, std::ratio<1, 1000000000>>
+// std::chrono::microseconds   duration<long long, std::ratio<1, 1000000>>
+// std::chrono::milliseconds   duration<long long, std::ratio<1, 1000>>
+// std::chrono::seconds        duration<long long>
+// std::chrono::minutes        duration<int, std::ratio<60>>
+// std::chrono::hours
 
 class Timestamp {
 public:
