@@ -20,6 +20,8 @@ public:
     static const int MicroSecondsPerSecond = 1000 * 1000;
 
     Timestamp() = default;
+    Timestamp(const Timestamp&) = default;
+    Timestamp(Timestamp&&) = default;
 
     explicit Timestamp(int64_t t):microSec_(t) {}
 

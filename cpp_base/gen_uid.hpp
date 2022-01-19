@@ -1,12 +1,13 @@
 #ifndef __STBASE_UID_SNOWFLAKE__
 #define __STBASE_UID_SNOWFLAKE__
 
+// lock-free snowflake generate uid algorithm
+// snowflake: https://github.com/twitter-archive/snowflake
+
 #include <stdint.h>
 #include <chrono>
 #include <atomic>
 #include <assert.h>
-
-#include <iostream>
 
 
 namespace StBase
@@ -34,7 +35,7 @@ public:
     static const int MACHINE_LEFT = sequence_bits;
     static const int TIMESTAMP_LEFT = machine_bits + sequence_bits;
 
-    void Init(int64_t start, int machineId) {
+    static void Init(int64_t startStamp, int machineId) {
         
     }
 
@@ -75,11 +76,12 @@ public:
                 seq;
     }
 
-    static void ParsePrintId(int64_t id) {
-        int64_t timestamp = id >> (sequence_bits + machine_bits);
-        int64_t sequence = id & MAX_SEQUENCE;
-        std::cout << "time " << timestamp << " sequence " << sequence << std::endl;
-    }
+    // static std::string ParseId(int64_t id) {
+    //     int64_t timestamp = id >> (sequence_bits + machine_bits);
+    //     int64_t sequence = id & MAX_SEQUENCE;
+    //     // std::cout << "time " << timestamp << " sequence " << sequence << std::endl;
+
+    // }
 
 private:
     static int64_t millSecond() {
