@@ -1,6 +1,6 @@
 #include "file_utils.hpp"
 #include "timestamp.hpp"
-#include "lockfree_snowflake.hpp"
+#include "gen_uid.hpp"
 
 #include "encode.hpp"
 #include <iostream>
@@ -52,7 +52,7 @@ int main() {
 				mstore[it->first] = i;
 			} else {
 				printf("i [%ld] id [%ld] old id [%d]\n",i, it->first, mstore[it->first]);
-				SnowFlake::ParsePrintId(it->first);
+				// SnowFlake::ParsePrintId(it->first);
 			}
 		}
 	}
