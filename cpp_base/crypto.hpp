@@ -10,6 +10,7 @@
 
 #include "exception.hpp"
 #include "encode.hpp"
+#include "file_utils.hpp"
 
 namespace StBase {
 
@@ -20,14 +21,17 @@ public:
 	static std::string AesEncrypt(const std::string &data);
 	static void AesEncrypt(const char *, size_t, std::vector<char> &);
 	static void AesEncrypt(const std::string &, std::vector<char> &);
+	static void AesEncrypt(int srcfd, int dstfd);
 
-	// aes 解密
 	static std::string AesDecrypt(const std::string &data);
 	static void AesDecrypt(const char *, size_t, std::vector<char> &);
 	static void AesDecrypt(const std::string &, std::vector<char> &);
+	static void AesDecrypt(int srcfd, int dstfd);
 	// static void AesDecrypt(const char *, size_t, std::string &);
 	// static void AesDecrypt(const char *, size_t, int &);
 	// static void AesDecrypt(const char *, size_t, float &);
+
+	
 
 private:
 	// (key对齐128)
@@ -39,6 +43,7 @@ private:
 
 private:
 	static const size_t key_size = 16;
+	static const size_t n_block = 64; // 文件加密block 数目
 	static AES_KEY aes_key_en;
 	static AES_KEY aes_key_de;
 };
@@ -173,6 +178,115 @@ void Crypto::sha256(std::vector<unsigned char> & res, const std::string & key) {
 }
 
 
+void Crypto::AesEncrypt(int srcfd, int dstfd) {
+	assert(srcfd >= 0 && dstfd >= 0);
+    struct stat fstat;
+    if (::fstat(srcfd, &fstat)) {
+		throw Exception("fstat error [%d]", errno);
+    }
+    	
+	if (!S_ISREG(fstat.st_mode)) {
+		throw Exception("S_ISREG false");
+    }
+	size_t fsize = fstat.st_size;
+	size_t readSize = AES_BLOCK_SIZE * (n_block - 1);
+	size_t nNum = fsize / readSize;
+	size_t remain = fsize % readSize;
+
+	// printf("nNum %ld remain %ld\n", nNum, remain);
+
+
+	unsigned char buf[AES_BLOCK_SIZE * n_block] = {0};
+	unsigned char outbuf[AES_BLOCK_SIZE * n_block] = {0};
+	for (size_t i = AES_BLOCK_SIZE * (n_block - 1); i < AES_BLOCK_SIZE * n_block; i++) {
+		buf[i] = AES_BLOCK_SIZE;
+	}
+
+	for (size_t i = 0; i < nNum; i++) {
+		while (::read(srcfd, buf, readSize) < 0) {
+			if (errno == EINTR) continue;
+			throw Exception("read file error [%d]", errno);
+		}
+		unsigned char iv[AES_BLOCK_SIZE];
+		memcpy(iv, g_iv, AES_BLOCK_SIZE);
+		AES_cbc_encrypt(buf, outbuf, AES_BLOCK_SIZE * n_block, &aes_key_en, iv, AES_ENCRYPT);
+		while (::write(dstfd, outbuf, AES_BLOCK_SIZE * n_block) < 0) {
+			if (errno == EINTR) continue;
+			throw Exception("write file error [%d]", errno);
+		}
+	}
+
+	size_t padding = AES_BLOCK_SIZE - remain % AES_BLOCK_SIZE;
+	for (size_t i = remain; i < remain + padding; i++) {
+		buf[i] = static_cast<unsigned char>(padding);
+	}
+	
+	// printf("padding %ld \n", padding);
+
+	while (::read(srcfd, buf, remain) < 0) {
+		if (errno == EINTR) continue;
+		throw Exception("read file error [%d]", errno);
+	}
+	unsigned char iv[AES_BLOCK_SIZE];
+	memcpy(iv, g_iv, AES_BLOCK_SIZE);
+	AES_cbc_encrypt(buf, outbuf, remain + padding, &aes_key_en, iv, AES_ENCRYPT);
+	int nn ;
+	while ((nn = ::write(dstfd, outbuf, remain + padding)) < 0) {
+		if (errno == EINTR) continue;
+		throw Exception("write file error [%d]", errno);
+	}
+	// printf("nn %d\n", nn);
+}
+
+
+void Crypto::AesDecrypt(int srcfd, int dstfd) {
+	assert(srcfd >= 0 && dstfd >= 0);
+    struct stat fstat;
+    if (::fstat(srcfd, &fstat)) {
+		throw Exception("fstat error [%d]", errno);
+    }
+    	
+	if (!S_ISREG(fstat.st_mode)) {
+		throw Exception("S_ISREG false");
+    }
+	size_t fsize = fstat.st_size;
+	size_t readSize = AES_BLOCK_SIZE * n_block;
+	size_t nNum = fsize / readSize;
+	size_t remain = fsize % readSize;
+
+	// printf("nNum %ld remain %ld\n", nNum, remain);
+
+	unsigned char buf[AES_BLOCK_SIZE * n_block] = {0};
+	unsigned char outbuf[AES_BLOCK_SIZE * n_block] = {0};
+	int nn =0 ;
+	for (size_t i = 0; i < nNum; i++) {
+		while (::read(srcfd, buf, readSize) < 0) {
+			if (errno == EINTR) continue;
+			throw Exception("read file error [%d]", errno);
+		}
+		unsigned char iv[AES_BLOCK_SIZE];
+		memcpy(iv, g_iv, AES_BLOCK_SIZE);
+		AES_cbc_encrypt(buf, outbuf, AES_BLOCK_SIZE * n_block, &aes_key_de, iv, AES_DECRYPT);
+		while (::write(dstfd, outbuf, AES_BLOCK_SIZE * (n_block - 1)) < 0) {
+			if (errno == EINTR) continue;
+			throw Exception("write file error [%d]", errno);
+		}
+	}
+	
+	while (::read(srcfd, buf, remain) < 0) {
+		if (errno == EINTR) continue;
+		throw Exception("read file error [%d]", errno);
+	}
+	
+	unsigned char iv[AES_BLOCK_SIZE];
+	memcpy(iv, g_iv, AES_BLOCK_SIZE);
+	AES_cbc_encrypt(buf, outbuf, remain, &aes_key_de, iv, AES_DECRYPT);
+	size_t padding = static_cast<size_t>(outbuf[remain - 1]);
+	while (::write(dstfd, outbuf, remain - padding) < 0) {
+		if (errno == EINTR) continue;
+		throw Exception("write file error [%d]", errno);
+	}
+}
 
 
 
