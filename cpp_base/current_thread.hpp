@@ -1,3 +1,5 @@
+// 编译选项 -rdynamic
+
 #include <string>
 #include <cxxabi.h>
 #include <execinfo.h>
