@@ -19,6 +19,13 @@ class Exception : public std::exception
         message_.append(buf, sizeof(buf));
     }
 
+    Exception(const std::string &msg)
+            : message_(StBase::CurrentThread::stackTrace())
+    {
+        message_.push_back('\n');
+        message_.append(msg);
+    }
+
     ~Exception() noexcept override = default;
 
     const char *what() const noexcept override
