@@ -5,6 +5,7 @@
 #include <string.h>
 #include <vector>
 #include <fstream>
+#include <algorithm>
 #include "openssl/aes.h"
 #include "openssl/sha.h"
 
@@ -201,14 +202,15 @@ void Crypto::AesEncrypt(int srcfd, int dstfd) {
 	for (size_t i = AES_BLOCK_SIZE * (n_block - 1); i < AES_BLOCK_SIZE * n_block; i++) {
 		buf[i] = AES_BLOCK_SIZE;
 	}
-
+	unsigned char iv[AES_BLOCK_SIZE];
+	memcpy(iv, g_iv, AES_BLOCK_SIZE);
 	for (size_t i = 0; i < nNum; i++) {
 		while (::read(srcfd, buf, readSize) < 0) {
 			if (errno == EINTR) continue;
 			throw Exception("read file error [%d]", errno);
 		}
-		unsigned char iv[AES_BLOCK_SIZE];
-		memcpy(iv, g_iv, AES_BLOCK_SIZE);
+		// unsigned char iv[AES_BLOCK_SIZE];
+		// memcpy(iv, g_iv, AES_BLOCK_SIZE);
 		AES_cbc_encrypt(buf, outbuf, AES_BLOCK_SIZE * n_block, &aes_key_en, iv, AES_ENCRYPT);
 		while (::write(dstfd, outbuf, AES_BLOCK_SIZE * n_block) < 0) {
 			if (errno == EINTR) continue;
@@ -227,11 +229,10 @@ void Crypto::AesEncrypt(int srcfd, int dstfd) {
 		if (errno == EINTR) continue;
 		throw Exception("read file error [%d]", errno);
 	}
-	unsigned char iv[AES_BLOCK_SIZE];
-	memcpy(iv, g_iv, AES_BLOCK_SIZE);
+	// unsigned char iv[AES_BLOCK_SIZE];
+	// memcpy(iv, g_iv, AES_BLOCK_SIZE);
 	AES_cbc_encrypt(buf, outbuf, remain + padding, &aes_key_en, iv, AES_ENCRYPT);
-	int nn ;
-	while ((nn = ::write(dstfd, outbuf, remain + padding)) < 0) {
+	while (::write(dstfd, outbuf, remain + padding) < 0) {
 		if (errno == EINTR) continue;
 		throw Exception("write file error [%d]", errno);
 	}
@@ -258,14 +259,17 @@ void Crypto::AesDecrypt(int srcfd, int dstfd) {
 
 	unsigned char buf[AES_BLOCK_SIZE * n_block] = {0};
 	unsigned char outbuf[AES_BLOCK_SIZE * n_block] = {0};
-	int nn =0 ;
+
+	unsigned char iv[AES_BLOCK_SIZE];
+	memcpy(iv, g_iv, AES_BLOCK_SIZE);
+
 	for (size_t i = 0; i < nNum; i++) {
 		while (::read(srcfd, buf, readSize) < 0) {
 			if (errno == EINTR) continue;
 			throw Exception("read file error [%d]", errno);
 		}
-		unsigned char iv[AES_BLOCK_SIZE];
-		memcpy(iv, g_iv, AES_BLOCK_SIZE);
+		// unsigned char iv[AES_BLOCK_SIZE];
+		// memcpy(iv, g_iv, AES_BLOCK_SIZE);
 		AES_cbc_encrypt(buf, outbuf, AES_BLOCK_SIZE * n_block, &aes_key_de, iv, AES_DECRYPT);
 		while (::write(dstfd, outbuf, AES_BLOCK_SIZE * (n_block - 1)) < 0) {
 			if (errno == EINTR) continue;
@@ -278,8 +282,8 @@ void Crypto::AesDecrypt(int srcfd, int dstfd) {
 		throw Exception("read file error [%d]", errno);
 	}
 	
-	unsigned char iv[AES_BLOCK_SIZE];
-	memcpy(iv, g_iv, AES_BLOCK_SIZE);
+	// unsigned char iv[AES_BLOCK_SIZE];
+	// memcpy(iv, g_iv, AES_BLOCK_SIZE);
 	AES_cbc_encrypt(buf, outbuf, remain, &aes_key_de, iv, AES_DECRYPT);
 	size_t padding = static_cast<size_t>(outbuf[remain - 1]);
 	while (::write(dstfd, outbuf, remain - padding) < 0) {
