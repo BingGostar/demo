@@ -9,7 +9,7 @@
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 
-static const char* in_name = "rtsp://10.151.3.78:7777/vlc";
+static const char* in_name = "rtsp://10.151.3.78:7777/elevator_cyc_dect_camera2_217";
 static const char* out_name = "rtmp://10.151.3.69/live/aaa";
 
 int interrupt_callback(void* ptr) {
@@ -22,7 +22,7 @@ int media_trans(const char* in_name, const char* in_protocol, \
     int ret = 0;
     AVPacket* pkt = NULL;
     AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
-
+    int video_index = 0;
     // input
     ifmt_ctx = avformat_alloc_context();
     if (!ifmt_ctx) {
@@ -60,11 +60,14 @@ int media_trans(const char* in_name, const char* in_protocol, \
         AVCodecParameters *in_codecpar = in_stream->codecpar;
         AVCodecContext* codec_ctx = avcodec_alloc_context3(NULL);
         avcodec_parameters_to_context(codec_ctx, in_codecpar);
-    
+
         if (in_codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            video_index = i;
             printf("extradata_size [%d]\n", in_codecpar->extradata_size);
             printf("codec_id %d \n", in_codecpar->codec_id);
-            printf("time base {%d, %d}\n",in_stream->time_base.num, in_stream->time_base.den);
+            printf("AVStream time_base {%d, %d}\n",in_stream->time_base.num, in_stream->time_base.den);
+            printf("AVStream r_frame_rate {%d, %d}\n", in_stream->r_frame_rate.num, in_stream->r_frame_rate.den);
+            printf("AVCodecContext time_base {%d, %d}\n", codec_ctx->time_base.num, codec_ctx->time_base.den);
             printf("pix fmt [%d] [%s]\n", codec_ctx->pix_fmt, av_get_pix_fmt_name(codec_ctx->pix_fmt));
             printf("width [%d] height [%d]\n", codec_ctx->width, codec_ctx->height);
         }
@@ -135,8 +138,14 @@ int media_trans(const char* in_name, const char* in_protocol, \
         goto end;
     }
 
-    AVRational out_time_base = {1, 500};
-    
+    int64_t video_frame_index = 0;    
+    int speed = 1;
+
+    AVRational in_video_time_base = ifmt_ctx->streams[video_index]->time_base;
+    AVRational in_video_frame_rate = ifmt_ctx->streams[video_index]->r_frame_rate;
+    int64_t calc_during = (int64_t)AV_TIME_BASE/(in_video_frame_rate.num * speed);
+
+    printf("calc_during [%ld]\n", calc_during);
 
     while (1) {
         ret = av_read_frame(ifmt_ctx, pkt);
@@ -150,21 +159,40 @@ int media_trans(const char* in_name, const char* in_protocol, \
             // continue;
             break;
         }
-      
-        
-        if (pkt->pts == AV_NOPTS_VALUE) {
-            printf("NOOOOOOOO!\n");
+
+        // 忽略关键帧跳帧的方式，适用于关键帧多的视频流
+        if (pkt->flags != AV_PKT_FLAG_KEY) { 
+            // if (video_frame_index % 2 == 0){
+                // video_frame_index++;
+                // continue;
+            // }
+            
         }
-
-
-        // if (pkt->flags != AV_PKT_FLAG_KEY) {
-        //     continue;
+        // if (pkt->pts == AV_NOPTS_VALUE) {
+        pkt->pts = (int64_t)(video_frame_index * calc_during) / (int64_t)(av_q2d(in_video_time_base) * AV_TIME_BASE);
+        pkt->dts = pkt->pts;
+        pkt->duration = 0; //(calc_during) / (int64_t)(av_q2d(in_video_time_base) * AV_TIME_BASE);
         // }
 
+
+
+        
         AVStream* in_stream = ifmt_ctx->streams[pkt->stream_index];
         AVStream* out_stream = ofmt_ctx->streams[pkt->stream_index];
-        av_packet_rescale_ts(pkt, in_stream->time_base, out_time_base);
+
+        av_packet_rescale_ts(pkt, in_stream->time_base, out_stream->time_base);
+        // if (pkt->pts != AV_NOPTS_VALUE)
+        //     pkt->pts = av_rescale_q(pkt->pts, in_stream->time_base, out_stream->time_base);
+        // if (pkt->dts != AV_NOPTS_VALUE)
+        //     pkt->dts = av_rescale_q(pkt->dts, in_stream->time_base, out_stream->time_base);
+        // if (pkt->duration > 0)
+        //     pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
         pkt->pos = -1;
+        
+        if (pkt->stream_index == video_index) {
+            video_frame_index++;
+        }
+
         if (av_interleaved_write_frame(ofmt_ctx, pkt) < 0) {
             printf("av_interleaved_write_frame error\n");
             break;
