@@ -160,7 +160,7 @@ int media_trans(const char* in_name, const char* in_protocol, \
             break;
         }
 
-        // 忽略关键帧跳帧的方式，适用于关键帧多的视频流
+        // 忽略关键帧跳帧的方式，在不涉及编解码的情况下适用于关键帧多的视频流
         if (pkt->flags != AV_PKT_FLAG_KEY) { 
             // if (video_frame_index % 2 == 0){
                 // video_frame_index++;
