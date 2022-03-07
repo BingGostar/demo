@@ -25,6 +25,40 @@ struct Duration
     template<typename rp, typename pd>
     Duration(const std::chrono::duration<rp, pd> & dur):duration(dur) {}
 
+    friend bool operator>(const Duration& ld, const Duration& rd) {
+        return ld.duration > ld.duration;
+    }
+
+    friend bool operator<(const Duration& ld, const Duration& rd) {
+        return ld.duration < ld.duration;
+    }
+
+    friend bool operator==(const Duration& ld, const Duration& rd) {
+        return ld.duration == ld.duration;
+    }
+
+    friend bool operator!=(const Duration& ld, const Duration& rd) {
+        return ld.duration != ld.duration;
+    }
+
+    Duration& operator+=(const Duration& dur) {
+        this->duration += dur.duration;
+        return *this;
+    }
+
+    Duration& operator-=(const Duration& dur) {
+        this->duration -= dur.duration;
+        return *this;
+    }
+
+    friend Duration operator+(const Duration& ld, const Duration& rd) {
+        return ld.duration + rd.duration;
+    }
+
+    friend Duration operator-(const Duration& ld, const Duration& rd) {
+        return ld.duration - rd.duration;
+    }
+
     system_clock::duration duration;
 };
 
@@ -132,7 +166,6 @@ class Timestamp
         return ltp.time_point - rtp.time_point;
     }
 
-
     Timestamp operator-(const Duration &dur) {
         return Timestamp(this->time_point - dur.duration);
     }
@@ -155,5 +188,8 @@ class Timestamp
     system_clock::time_point time_point;
 };
 
+
+static Timestamp TIMESTAMP_ZERO(system_clock::duration::zero());
+static Timestamp TIMESTAMP_FUTURE(system_clock::duration::max());
 
 }
