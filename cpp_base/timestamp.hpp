@@ -5,72 +5,66 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
+#include <chrono>
 
 namespace StBase {
 
-class Timestamp;
-// 以微秒为单位
-class Duration
+using namespace std::chrono;
+
+struct Duration
 {
-    public:
-    static const int64_t MicroSecond = 1;
-    static const int64_t MilliSecond = 1000 * MicroSecond;
-    static const int64_t Second = 1000 * MilliSecond;
-    static const int64_t Minute = 60 * Second;
-    static const int64_t Hour = 60 * Minute;
-    friend class Timestamp;
+    typedef std::chrono::microseconds MicroSeconds;
+    typedef std::chrono::milliseconds MilliSeconds;
+    typedef std::chrono::seconds Seconds;
+    typedef std::chrono::minutes Minutes;
+    typedef std::chrono::hours Hours;
+    typedef std::chrono::duration<int64_t, std::ratio<60 * 60 * 24>> Days;
 
-    public:
-    Duration(int64_t t) : microSec_(t)
-    {
-    }
+    Duration(const system_clock::duration & dur):duration(dur) {}
+    
+    template<typename rp, typename pd>
+    Duration(const std::chrono::duration<rp, pd> & dur):duration(dur) {}
 
-    bool operator==(const Duration &dur)
-    {
-        return microSec_ == dur.microSec_;
-    }
-
-    bool operator>(const Duration &dur)
-    {
-        return microSec_ > dur.microSec_;
-    }
-
-    private:
-    int64_t microSec_;
+    system_clock::duration duration;
 };
+
 
 class Timestamp
 {
     public:
-    static const int64_t MicroSecondsPerSecond = 1000 * 1000;
+    static const int64_t MicroSecondsPerSecond = 1000 * 1000; // 以微秒为单位
 
     Timestamp() = default;
     Timestamp(const Timestamp &) = default;
     Timestamp(Timestamp &&) = default;
-
-    explicit Timestamp(int64_t t) : microSec_(t)
-    {
+    Timestamp &operator=(const Timestamp &stamp) {
+        if (this != &stamp) {
+            this->time_point = stamp.time_point;
+        }
+        return *this;
     }
 
-    static Timestamp Now()
-    {
-        ::timeval val;
-        gettimeofday(&val, NULL);
-        return Timestamp(static_cast<int64_t>(val.tv_sec * MicroSecondsPerSecond + val.tv_usec));
+    explicit Timestamp(const system_clock::duration & dur) : time_point(dur) {}
+    explicit Timestamp(const system_clock::time_point & tp) : time_point(tp) {}
+
+    static Timestamp Now() {
+        Timestamp stamp;
+        stamp.time_point = system_clock::now();
+        return stamp;
     }
 
-    static Timestamp FromUnixTime(time_t tt)
-    {
-        return FromUnixTime(tt, 0);
+    static Timestamp FromUnixTime(time_t tt) {
+        Timestamp stamp;
+        stamp.time_point = system_clock::from_time_t(tt);
+        return stamp;
     }
 
-    static Timestamp FromUnixTime(time_t tt, int mics)
-    {
-        return Timestamp(static_cast<int64_t>(tt * MicroSecondsPerSecond + mics));
+    static Timestamp FromUnixTime(time_t tt, int mics) {
+        Timestamp stamp(std::chrono::microseconds(tt * MicroSecondsPerSecond + mics));
+        return stamp;
     }
 
-    static Timestamp FromString(const std::string &str)
-    {
+    static Timestamp FromString(const std::string &str) {
         int year, mon, day, hour, min, sec;
         ::sscanf(str.c_str(), "%d-%d-%d %d:%d:%d", &year, &mon, &day, &hour, &min, &sec);
         struct tm t = { 0 };
@@ -84,8 +78,7 @@ class Timestamp
     }
 
     static Timestamp FromDayTime(int year, int mon, int day, int hour = 0, int min = 0,
-                                 int sec = 0)
-    {
+                                 int sec = 0) {
         ::tm t = { 0 };
         t.tm_year = year - 1900;
         t.tm_mon = mon - 1;
@@ -97,22 +90,19 @@ class Timestamp
     }
 
     public:
-    ::time_t ToUnixTime() const
-    {
-        return static_cast<time_t>(microSec_ / MicroSecondsPerSecond);
+    ::time_t ToUnixTime() const {
+        return system_clock::to_time_t(time_point);
     }
 
-    ::tm ToTmTime() const
-    {
-        time_t tt_time = static_cast<time_t>(microSec_ / MicroSecondsPerSecond);
+    ::tm ToTmTime() const {
+        time_t tt_time = system_clock::to_time_t(time_point);
         struct tm tm_time = { 0 };
         gmtime_r(&tt_time, &tm_time);
         return tm_time;
     }
 
-    std::string FormatString() const
-    {
-        time_t tt_time = static_cast<time_t>(microSec_ / MicroSecondsPerSecond);
+    std::string FormatString() const {
+        time_t tt_time = system_clock::to_time_t(time_point);
         struct tm tm_time = { 0 };
         gmtime_r(&tt_time, &tm_time);
         char buf[64] = { 0 };
@@ -122,50 +112,47 @@ class Timestamp
         return buf;
     }
 
-    Duration During(const Timestamp &a)
-    {
-        if (this->microSec_ > a.microSec_) {
-            return Duration(this->microSec_ - a.microSec_);
-        }
-        return Duration(a.microSec_ - this->microSec_);
+    friend bool operator<(const Timestamp &ltp, const Timestamp &rtp) {
+        return ltp.time_point < rtp.time_point;
     }
 
-    Timestamp &operator=(const Timestamp &tp)
-    {
-        if (this != &tp) {
-            this->microSec_ = tp.microSec_;
-        }
+    friend bool operator>(const Timestamp &ltp, const Timestamp &rtp) {
+        return ltp.time_point > rtp.time_point;
+    }
+
+    friend bool operator==(const Timestamp &ltp, const Timestamp &rtp) {
+        return ltp.time_point == rtp.time_point;
+    }
+
+    friend bool operator!=(const Timestamp &ltp, const Timestamp &rtp) {
+        return ltp.time_point != rtp.time_point;
+    }
+
+    friend Duration operator-(const Timestamp& ltp, const Timestamp& rtp) {
+        return ltp.time_point - rtp.time_point;
+    }
+
+
+    Timestamp operator-(const Duration &dur) {
+        return Timestamp(this->time_point - dur.duration);
+    }
+
+    Timestamp& operator-=(const Duration &dur) {
+        this->time_point -= dur.duration;
+        return *this;
+    }
+    
+    Timestamp operator+(const Duration &dur) {
+        return Timestamp(this->time_point + dur.duration);
+    }
+
+    Timestamp& operator+=(const Duration &dur) {
+        this->time_point += dur.duration;
         return *this;
     }
 
-    friend bool operator<(const Timestamp &ltp, const Timestamp &rtp)
-    {
-        return ltp.microSec_ < rtp.microSec_;
-    }
-
-    friend bool operator==(const Timestamp &ltp, const Timestamp &rtp)
-    {
-        return ltp.microSec_ == rtp.microSec_;
-    }
-
-    friend bool operator!=(const Timestamp &ltp, const Timestamp &rtp)
-    {
-        return ltp.microSec_ != rtp.microSec_;
-    }
-
-    Timestamp &operator-(const Duration &dur)
-    {
-        this->microSec_ -= dur.microSec_;
-        return *this;
-    }
-    Timestamp &operator+(const Duration &dur)
-    {
-        this->microSec_ += dur.microSec_;
-        return *this;
-    }
-
-    private:
-    int64_t microSec_;
+    public:
+    system_clock::time_point time_point;
 };
 
 
